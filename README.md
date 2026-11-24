@@ -18,11 +18,11 @@ Een eerste desktopversie voor Windows. De app opent de officiële LEGO-pagina vo
 6. Klik **Visueel vergelijken…** om een PDF-element naast een Rebrickable-onderdeelafbeelding te bekijken. Selecteer aan beide kanten een onderdeel en bevestig een match alleen als vorm en kleur overeenkomen. Bevestigde koppelingen worden per set lokaal opgeslagen.
 7. Kies **Onderdelen details… → Setbeheer → Exporteer onderdelen naar excel** om de onderdelenlijst als `.xlsx`-werkmap op te slaan. Standaard wordt de export in `downloads\<setnummer>` voorgesteld.
 
-Via **Onderdelen details…** open je het setbeheer en de instellingen. In **Setbeheer** vind je ook **Bouwstappen bekijken…** en **Bouwstappen per onderdeel…**. Voor omschrijvingen kun je een persoonlijke [Rebrickable API-sleutel](https://rebrickable.com/api/) opslaan onder **Instellingen**. Daar stel je ook de klantnaam voor het huurformulier in.
+Via **Onderdelen details…** open je het setbeheer, met onder meer **Bouwstappen bekijken…** en **Bouwstappen per onderdeel…**. Via **Profiel** stel je je naam voor het huurformulier, je postcode voor het retourportaal, je [Rebrickable API-sleutel](https://rebrickable.com/api/) en de namen van mede-eigenaren in. Het profiel wordt lokaal opgeslagen.
 
 De app bewaart geleerde onderdeelherkenningen en elementkoppelingen apart in `herkenningskennis.sqlite3`. Met **Set verwijderen…** verwijder je de lokale setbestanden. Bij een latere analyse kan de app dezelfde gecontroleerde tekeningen en elementkoppelingen opnieuw toepassen.
 
-Onder **Eigen LEGO-sets…** registreer je sets per eigenaar en aantal. De setnaam, het aantal onderdelen, het thema en de leeftijdsindicatie komen van LEGO.com. Onder **Gehuurde LEGO-sets…** vind je diezelfde gegevens voor de Superbouwers-huurgeschiedenis. Een registratie in een van beide lijsten start ook de gewone setanalyse. Beide lijsten blijven beschikbaar als je gedownloade setgegevens verwijdert.
+Onder **Eigen LEGO-sets…** registreer je sets per eigenaar en aantal. Bij een nieuwe registratie staat je eigen naam alvast ingevuld. Je kunt een mede-eigenaar kiezen of een andere naam typen. De setnaam, het aantal onderdelen, het thema en de leeftijdsindicatie komen van LEGO.com. Onder **Gehuurde LEGO-sets…** vind je diezelfde gegevens voor de Superbouwers-huurgeschiedenis. Een registratie in een van beide lijsten start ook de gewone setanalyse. Beide lijsten blijven beschikbaar als je gedownloade setgegevens verwijdert.
 
 Selecteer een gehuurde set om onderdeelafwijkingen vast te leggen of het A4-onderdelenformulier te maken en af te drukken. **Retourzending aanmaken…** opent het retourportaal van Superbouwers.
 

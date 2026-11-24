@@ -64,7 +64,7 @@ def collection_rows(db, rental):
 
 
 def show_owned_sets(parent, path, initial_number, open_set, *, comparison_count, rental=False,
-                    rental_action=None, return_action=None):
+                    rental_action=None, return_action=None, owner_names=tuple, default_owner=str):
     with closing(connect_collection(path, rental=rental)) as db:
         rows = collection_rows(db, rental)
         metadata = {n: (title, pieces, theme, age) for n, title, pieces, theme, age in db.execute("SELECT * FROM setgegevens")}
@@ -98,7 +98,11 @@ def show_owned_sets(parent, path, initial_number, open_set, *, comparison_count,
     fields = []
     for index, (label, width) in enumerate(zip(("Setnummer", "Eigenaar", "Aantal"), (13, 24, 7))):
         ttk.Label(form, text=label).grid(row=0, column=index, sticky="w", padx=(0, 8))
-        field = ttk.Entry(form, width=width)
+        if label == "Eigenaar" and not rental:
+            field = ttk.Combobox(form, width=width, values=owner_names())
+            field.configure(postcommand=lambda combo=field: combo.configure(values=owner_names()))
+        else:
+            field = ttk.Entry(form, width=width)
         field.grid(row=1, column=index, sticky="ew", padx=(0, 8))
         fields.append(field)
     ttk.Label(form, text="Setnaam").grid(row=0, column=3, sticky="w")
@@ -192,7 +196,7 @@ def show_owned_sets(parent, path, initial_number, open_set, *, comparison_count,
         nonlocal editing
         editing = None
         table.selection_remove(table.selection())
-        display((number, "Superbouwers" if rental else "", 1, *("" for _ in identifier_fields)))
+        display((number, "Superbouwers" if rental else default_owner(), 1, *("" for _ in identifier_fields)))
         save_button.configure(text="Toevoegen")
         open_button.configure(state="disabled")
         delete_button.configure(state="disabled")

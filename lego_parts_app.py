@@ -124,7 +124,24 @@ def load_config() -> dict:
 
 
 def save_config(config: dict) -> None:
-    CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    temporary = None
+    try:
+        with NamedTemporaryFile(mode="w", encoding="utf-8", dir=CONFIG_PATH.parent, delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(config, stream, indent=2, ensure_ascii=False)
+        temporary.replace(CONFIG_PATH)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def unique_owner_names(names):
+    owners = {}
+    for name in names:
+        name = name.strip()
+        if name:
+            owners.setdefault(name.casefold(), name)
+    return tuple(owners.values())
 
 
 def request_json(url: str, api_key: str) -> dict:
@@ -563,7 +580,10 @@ class LegoPartsApp(tk.Tk):
         header = ttk.Frame(root)
         header.pack(fill="x", pady=(0, 14))
         ttk.Label(header, text="LEGO onderdelenlijst", font=("Segoe UI", 19, "bold")).pack(side="left")
-        ttk.Button(header, text="Onderdelen details…", command=self.open_management).pack(side="right")
+        shortcuts = ttk.Frame(header)
+        shortcuts.pack(side="right")
+        ttk.Button(shortcuts, text="Profiel", command=self.open_profile).pack(fill="x")
+        ttk.Button(shortcuts, text="Onderdelen details…", command=self.open_management).pack(fill="x", pady=(4, 0))
 
         form = ttk.Frame(root)
         form.pack(fill="x")
@@ -650,11 +670,8 @@ class LegoPartsApp(tk.Tk):
         window.transient(self)
         window.protocol("WM_DELETE_WINDOW", window.withdraw)
         window.bind("<Escape>", lambda _event: window.withdraw())
-        tabs = ttk.Notebook(window)
-        tabs.pack(fill="both", expand=True, padx=12, pady=12)
-
-        sets = ttk.Frame(tabs, padding=14)
-        tabs.add(sets, text="Setbeheer")
+        sets = ttk.Frame(window, padding=14)
+        sets.pack(fill="both", expand=True)
         self._managed_set_label = ttk.Label(sets)
         self._managed_set_label.pack(anchor="w", pady=(0, 10))
         self.set_number.trace_add("write", self._update_managed_set)
@@ -673,25 +690,68 @@ class LegoPartsApp(tk.Tk):
                        ttk.Button(sets, text="Set verwijderen…", command=self.delete_saved_set)):
             button.pack(anchor="w", fill="x", pady=3)
 
-        settings = ttk.Frame(tabs, padding=14)
-        tabs.add(settings, text="Instellingen")
-        settings.columnconfigure(0, weight=1)
-        ttk.Label(settings, text="Rebrickable API-sleutel").grid(row=0, column=0, sticky="w")
-        self.key_entry = ttk.Entry(settings, show="•", width=40)
-        self.key_entry.grid(row=1, column=0, sticky="ew", padx=(0, 8), pady=(4, 0))
-        self.key_entry.insert(0, self.config_data.get("rebrickable_api_key", ""))
-        ttk.Button(settings, text="Sleutel opslaan", command=self.save_key).grid(row=1, column=1, sticky="w")
-        ttk.Label(settings, text="Naam klant (huurformulier)").grid(row=2, column=0, sticky="w", pady=(12, 0))
-        self.customer_entry = ttk.Entry(settings)
-        self.customer_entry.grid(row=3, column=0, sticky="ew", padx=(0, 8), pady=(4, 0))
-        self.customer_entry.insert(0, self.config_data.get("customer_name", ""))
-        ttk.Button(settings, text="Naam opslaan", command=self.save_customer_name).grid(row=3, column=1, sticky="w")
-        ttk.Label(settings, text="Postcode (SuperBouwer-retourportaal)").grid(row=4, column=0, sticky="w", pady=(12, 0))
-        self.return_postcode = tk.StringVar(value=self.config_data.get("return_postcode", ""))
-        ttk.Entry(settings, textvariable=self.return_postcode).grid(row=5, column=0, sticky="ew", padx=(0, 8), pady=(4, 0))
-        ttk.Button(settings, text="Postcode opslaan", command=self.save_return_postcode).grid(row=5, column=1, sticky="w")
-        self._settings_feedback = tk.StringVar(window)
-        ttk.Label(settings, textvariable=self._settings_feedback).grid(row=6, column=0, columnspan=2, sticky="w", pady=(10, 0))
+    def open_profile(self):
+        window = getattr(self, "_profile_window", None)
+        if window is not None and window.winfo_exists():
+            window.lift()
+            return
+
+        window = self._profile_window = tk.Toplevel(self)
+        window.title("Profiel")
+        window.transient(self)
+        window.bind("<Escape>", lambda _event: window.destroy())
+        profile = ttk.Frame(window, padding=16)
+        profile.pack(fill="both", expand=True)
+
+        fields = {}
+        for key, label, mask in (
+            ("customer_name", "Mijn naam (ook op het huurformulier)", ""),
+            ("return_postcode", "Mijn postcode (retourportaal Superbouwers)", ""),
+            ("rebrickable_api_key", "Rebrickable API-sleutel", "•"),
+        ):
+            ttk.Label(profile, text=label).pack(anchor="w")
+            entry = ttk.Entry(profile, width=49, show=mask)
+            entry.insert(0, self.config_data.get(key, ""))
+            entry.pack(fill="x", pady=(4, 10))
+            fields[key] = entry
+
+        ttk.Label(profile, text="Mede-eigenaren van LEGO-sets (één naam per regel)").pack(anchor="w")
+        owners_frame = ttk.Frame(profile)
+        owners_frame.pack(fill="both", expand=True, pady=(4, 12))
+        owners_entry = tk.Text(owners_frame, height=5, width=44, wrap="none")
+        owners_scroll = ttk.Scrollbar(owners_frame, orient="vertical", command=owners_entry.yview)
+        owners_entry.configure(yscrollcommand=owners_scroll.set)
+        owners_entry.insert("1.0", "\n".join(self.config_data.get("co_owners", ())))
+        owners_scroll.pack(side="right", fill="y")
+        owners_entry.pack(side="left", fill="both", expand=True)
+
+        def save():
+            settings = {key: entry.get().strip() for key, entry in fields.items()}
+            own_name = settings["customer_name"].casefold()
+            names = owners_entry.get("1.0", "end-1c").splitlines()
+            settings["co_owners"] = [name for name in unique_owner_names(names) if name.casefold() != own_name]
+            try:
+                self._save_profile_settings(**settings)
+            except OSError as exc:
+                messagebox.showerror("Profiel", f"Het profiel kon niet worden opgeslagen. {exc}", parent=window)
+                return
+            window.destroy()
+
+        actions = ttk.Frame(profile)
+        actions.pack(fill="x")
+        ttk.Button(actions, text="Opslaan", command=save).pack(side="right")
+        ttk.Button(actions, text="Annuleren", command=window.destroy).pack(side="right", padx=(0, 6))
+        fields["customer_name"].focus_set()
+
+    def _save_profile_settings(self, **settings):
+        save_config({**self.config_data, **settings})
+        self.config_data.update(settings)
+
+    def _profile_owner_names(self):
+        return unique_owner_names((self.config_data.get("customer_name", ""), *self.config_data.get("co_owners", ())))
+
+    def _rebrickable_key(self):
+        return self.config_data.get("rebrickable_api_key", "").strip()
 
     def _update_managed_set(self, *_args):
         set_number = self.set_entry.get().strip()
@@ -721,6 +781,8 @@ class LegoPartsApp(tk.Tk):
                 initialize_rental_history(path, APP_DIR / "downloads")
             window = show_owned_sets(self, path, self.set_entry.get().strip(), self._request_collection_set,
                                      comparison_count=self._collection_difference_count,
+                                     owner_names=self._profile_owner_names,
+                                     default_owner=lambda: self.config_data.get("customer_name", "").strip(),
                                      rental=rental, rental_action=self._request_collection_set if rental else None,
                                      return_action=self._open_rental_return if rental else None)
             setattr(self, window_attribute, window)
@@ -739,8 +801,10 @@ class LegoPartsApp(tk.Tk):
                 return
             postcode = postcode.strip()
             if postcode:
-                self.return_postcode.set(postcode)
-                self.save_return_postcode()
+                try:
+                    self._save_profile_settings(return_postcode=postcode)
+                except OSError as exc:
+                    messagebox.showwarning("Retourportaal", f"De postcode kon niet worden opgeslagen. {exc}", parent=parent)
         open_return_portal(parent, postcode)
 
     def _request_collection_set(self, number, action=None, *, box_number=""):
@@ -802,7 +866,8 @@ class LegoPartsApp(tk.Tk):
                 window = getattr(self, "_rental_history_window", None)
                 parent = window if window is not None and window.winfo_exists() else self
                 form_action(parent, self.active_set_number, inventory, path,
-                            self.customer_entry.get().strip(), box_number=box_number, print_form=action == "print")
+                            self.config_data.get("customer_name", "").strip(),
+                            box_number=box_number, print_form=action == "print")
         except (OSError, sqlite3.Error) as exc:
             messagebox.showerror("Huurregistratie", str(exc), parent=self)
 
@@ -1110,7 +1175,7 @@ class LegoPartsApp(tk.Tk):
         element_id, part_number = str(values[0]).strip(), str(values[1]).strip()
         color_name = str(values[3]).strip()
         key = self._thumb_rows.get(row_id) or self._picture_key(element_id)
-        api_key = self.key_entry.get().strip()
+        api_key = self._rebrickable_key()
 
         try:
             from PIL import Image, ImageTk
@@ -1427,7 +1492,7 @@ class LegoPartsApp(tk.Tk):
         if not self.pdf_rows or not self.catalog_records:
             messagebox.showinfo("Onderdelenlijst ontbreekt", "Lees eerst een PDF en laad de Rebrickable-setinventaris.", parent=self)
             return
-        api_key = self.key_entry.get().strip()
+        api_key = self._rebrickable_key()
         if not api_key:
             messagebox.showinfo("API-sleutel ontbreekt", "Vul eerst je Rebrickable API-sleutel in en sla deze op.", parent=self)
             return
@@ -1909,23 +1974,6 @@ class LegoPartsApp(tk.Tk):
         messagebox.showerror("Onderdelenindex niet gevonden", detail, parent=self)
         self._unlock_set_entry()
 
-    def save_customer_name(self) -> None:
-        self.config_data["customer_name"] = self.customer_entry.get().strip()
-        save_config(self.config_data)
-        self._settings_feedback.set("Klantnaam lokaal opgeslagen.")
-
-    def save_return_postcode(self) -> None:
-        postcode = self.return_postcode.get().strip()
-        self.config_data["return_postcode"] = postcode
-        save_config(self.config_data)
-        self._settings_feedback.set("Postcode lokaal opgeslagen." if postcode else "Opgeslagen postcode gewist.")
-
-    def save_key(self) -> None:
-        key = self.key_entry.get().strip()
-        self.config_data["rebrickable_api_key"] = key
-        save_config(self.config_data)
-        self._settings_feedback.set("API-sleutel lokaal opgeslagen.")
-
     def _extract_and_enrich(self, cached_extracted: list[tuple[str, int]] | None = None) -> None:
         try:
             extracted = cached_extracted
@@ -1936,7 +1984,7 @@ class LegoPartsApp(tk.Tk):
                     self._save_parts_index_cache(pdf_paths, self.pdf_path, extracted)
             if not extracted:
                 raise ValueError("Geen onderdeelregels als tekst gevonden. Deze PDF heeft mogelijk een afbeelding als onderdelenlijst; OCR-ondersteuning volgt later.")
-            key = self.key_entry.get().strip()
+            key = self._rebrickable_key()
             set_number = self.active_set_number
             catalog_cache = self._analysis_cache_path("rebrickable_inventory.json")
             if catalog_cache:
@@ -2147,7 +2195,7 @@ class LegoPartsApp(tk.Tk):
         )
         self._bring_to_front()
         if auto_compare and pdf_only:
-            api_key = self.key_entry.get().strip()
+            api_key = self._rebrickable_key()
             signature = (self.set_entry.get().strip(), tuple(sorted((str(number).strip(), int(quantity)) for number, quantity in pdf_rows)))
             if pdf_only and api_key and signature not in self._auto_lookup_signatures and not self._lookup_in_progress:
                 self._auto_lookup_signatures.add(signature)
@@ -2174,7 +2222,7 @@ class LegoPartsApp(tk.Tk):
             if win._selected_pdf and win._selected_pdf["id"] == element_id:
                 label.configure(text=f"LEGO-elementkleur (Rebrickable): {cached}")
             return
-        api_key = self.key_entry.get().strip()
+        api_key = self._rebrickable_key()
         if not api_key:
             tree.set(item_id, "color", "API-sleutel nodig")
             if win._selected_pdf and win._selected_pdf["id"] == element_id:
