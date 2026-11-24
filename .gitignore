@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+lego_parts_config.json
+*.sqlite3*
+downloads/
+onderdeelafbeeldingen/
+.return-portal-browser/
+.return-portal-deps/
+backups/
